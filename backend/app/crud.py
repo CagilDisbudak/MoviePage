@@ -57,3 +57,23 @@ def create_review(db: Session, review: schemas.ReviewCreate):
 
 def get_reviews_for_movie(db: Session, movie_id: int):
     return db.query(models.Review).filter(models.Review.movie_id == movie_id).all()
+
+def get_favorites(db: Session, user_id: int):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    return user.favorites if user else []
+
+def add_favorite(db: Session, user_id: int, movie_id: int):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    movie = db.query(models.Movie).filter(models.Movie.id == movie_id).first()
+    if user and movie and movie not in user.favorites:
+        user.favorites.append(movie)
+        db.commit()
+    return user
+
+def remove_favorite(db: Session, user_id: int, movie_id: int):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    movie = db.query(models.Movie).filter(models.Movie.id == movie_id).first()
+    if user and movie and movie in user.favorites:
+        user.favorites.remove(movie)
+        db.commit()
+    return user

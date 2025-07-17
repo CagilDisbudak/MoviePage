@@ -297,7 +297,7 @@ const showcaseInfo: React.CSSProperties = {
 };
 
 // GenrePage component for genre-specific movie lists
-function GenrePage({ movies, genres, FILMS_PER_PAGE }: { movies: any[], genres: string[], FILMS_PER_PAGE: number }) {
+function GenrePage({ movies, genres, FILMS_PER_PAGE, favorites, toggleFavorite, authUser }: { movies: any[], genres: string[], FILMS_PER_PAGE: number, favorites: number[], toggleFavorite: (id: number) => void, authUser: any }) {
   const { genreName } = useParams();
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<any | null>(null);
@@ -343,6 +343,16 @@ function GenrePage({ movies, genres, FILMS_PER_PAGE }: { movies: any[], genres: 
                 })()}
                 {m.year ? `, ${m.year}` : ''}
               </div>
+              {authUser && (
+                <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 2 }}>
+                  <HeartButton
+                    isFavorite={favorites.includes(m.id)}
+                    onClick={e => { e.stopPropagation(); toggleFavorite(m.id); }}
+                    size={28}
+                    title={favorites.includes(m.id) ? 'Remove from favorites' : 'Add to favorites'}
+                  />
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -393,6 +403,16 @@ function GenrePage({ movies, genres, FILMS_PER_PAGE }: { movies: any[], genres: 
                 <iframe src={selected.trailer_url || selected.trailer || placeholderTrailer} title={selected.title + ' trailer'} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 0, borderRadius: 10 }} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
               </div>
             </div>
+            {authUser && selected && (
+              <div style={{ position: 'absolute', top: 18, right: 54, zIndex: 2 }}>
+                <HeartButton
+                  isFavorite={favorites.includes(selected.id)}
+                  onClick={e => { e.stopPropagation(); toggleFavorite(selected.id); }}
+                  size={34}
+                  title={favorites.includes(selected.id) ? 'Remove from favorites' : 'Add to favorites'}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -537,6 +557,24 @@ function App() {
   const location = useLocation();
   const [genreDropdown, setGenreDropdown] = useState('');
   const [genres, setGenres] = useState<string[]>([]);
+  // Move favorites and toggleFavorite to top-level App function
+  const [favorites, setFavorites] = React.useState<number[]>([]);
+  const toggleFavorite = async (movieId: number) => {
+    if (!auth.token) return;
+    if (favorites.includes(movieId)) {
+      await fetch(`http://localhost:8000/favorites/${movieId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${auth.token}` },
+      });
+      setFavorites((favs: number[]) => favs.filter((id: number) => id !== movieId));
+    } else {
+      await fetch(`http://localhost:8000/favorites/${movieId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${auth.token}` },
+      });
+      setFavorites((favs: number[]) => [...favs, movieId]);
+    }
+  };
 
   useEffect(() => {
     fetch('http://localhost:8000/json/genres')
@@ -596,16 +634,29 @@ function App() {
   React.useEffect(() => {
     if (!auth.user && !auth.loading) setAuthModalOpen(true);
   }, [auth.user, auth.loading]);
+  // Close modal on login
+  React.useEffect(() => {
+    if (auth.user) setAuthModalOpen(false);
+  }, [auth.user]);
+
+  const [profileModalOpen, setProfileModalOpen] = React.useState(false);
 
   return (
     <>
       <AuthModal open={authModalOpen} onClose={() => setAuthModalOpen(false)} />
       {auth.user && !auth.loading && (
         <div style={{ position: 'fixed', top: 0, right: 0, zIndex: 2000, background: '#181818', color: '#fff', padding: 16, borderBottomLeftRadius: 12, boxShadow: '0 2px 8px #000a', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span>Welcome, <b>{auth.user.username}</b> ({auth.user.role})</span>
+          <span
+            style={{ cursor: 'pointer', textDecoration: 'underline dotted', fontWeight: 600 }}
+            onClick={() => setProfileModalOpen(true)}
+            title="View profile"
+          >
+            Welcome, <b>{auth.user.username}</b> ({auth.user.role})
+          </span>
           <button style={{ background: '#00bfff', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 16px', cursor: 'pointer' }} onClick={auth.logout}>Logout</button>
         </div>
       )}
+      <UserProfileModal open={profileModalOpen} onClose={() => setProfileModalOpen(false)} user={auth.user} favorites={favorites} setFavorites={setFavorites} />
       {!auth.user && !auth.loading && !authModalOpen && (
         <button
           style={{ position: 'fixed', top: 16, right: 16, zIndex: 2000, background: '#00bfff', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 16, padding: '10px 28px', boxShadow: '0 2px 8px #00bfff44', cursor: 'pointer' }}
@@ -725,11 +776,21 @@ function App() {
               {paged.map(m => (
                 <div
                   key={m.id}
-                  style={showcaseHovered === m.id ? showcaseCardHover : showcaseCardStyles}
+                  style={{ ...(showcaseHovered === m.id ? showcaseCardHover : showcaseCardStyles), position: 'relative' }}
                   onClick={() => setSelected(m)}
                   onMouseEnter={() => setShowcaseHovered(m.id)}
                   onMouseLeave={() => setShowcaseHovered(null)}
                 >
+                  {/* HeartButton absolutely positioned at top-right, above poster */}
+                  {auth.user && (
+                    <HeartButton
+                      isFavorite={favorites.includes(m.id)}
+                      onClick={e => { e.stopPropagation(); toggleFavorite(m.id); }}
+                      size={28}
+                      title={favorites.includes(m.id) ? 'Remove from favorites' : 'Add to favorites'}
+                      style={{ position: 'absolute', top: 12, right: 12, zIndex: 3, background: 'rgba(24,24,24,0.92)', borderRadius: '50%', boxShadow: '0 2px 8px #000a', padding: 4 }}
+                    />
+                  )}
                   <MoviePoster
                     src={m.posterUrl || m.poster_url || placeholderPoster}
                     alt={m.title + ' poster'}
@@ -798,12 +859,21 @@ function App() {
                       <iframe src={selected.trailer_url || selected.trailer || placeholderTrailer} title={selected.title + ' trailer'} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 0, borderRadius: 10 }} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
                     </div>
                   </div>
+                  {auth.user && selected && (
+                    <HeartButton
+                      isFavorite={favorites.includes(selected.id)}
+                      onClick={e => { e.stopPropagation(); toggleFavorite(selected.id); }}
+                      size={34}
+                      title={favorites.includes(selected.id) ? 'Remove from favorites' : 'Add to favorites'}
+                      style={{ position: 'absolute', top: 18, right: 18, zIndex: 2, background: 'rgba(24,24,24,0.92)', borderRadius: '50%', boxShadow: '0 2px 8px #000a', padding: 6 }}
+                    />
+                  )}
                 </div>
               </div>
             )}
           </>
         } />
-        <Route path="/genre/:genreName" element={<GenrePage movies={movies} genres={genres} FILMS_PER_PAGE={FILMS_PER_PAGE} />} />
+        <Route path="/genre/:genreName" element={<GenrePage movies={movies} genres={genres} FILMS_PER_PAGE={FILMS_PER_PAGE} favorites={favorites} toggleFavorite={toggleFavorite} authUser={auth.user} />} />
       </Routes>
     </>
   );
@@ -884,5 +954,118 @@ function AuthModal({ open, onClose }: { open: boolean; onClose: () => void }) {
         )}
       </div>
     </div>
+  );
+}
+
+function UserProfileModal({ open, onClose, user, favorites, setFavorites }: { open: boolean; onClose: () => void; user: any; favorites: number[]; setFavorites: (favs: number[]) => void }) {
+  const auth = useAuth();
+  const [favoriteFilms, setFavoriteFilms] = React.useState<{ id: number; title: string; year: number }[]>([]);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!open || !user || !auth.token) return;
+    setLoading(true);
+    fetch('http://localhost:8000/favorites', {
+      headers: { Authorization: `Bearer ${auth.token}` },
+    })
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        setFavoriteFilms(data);
+        setFavorites(data.map((f: any) => f.id));
+      })
+      .finally(() => setLoading(false));
+  }, [open, user, auth.token, setFavorites]);
+
+  const removeFavorite = async (movieId: number) => {
+    if (!auth.token) return;
+    await fetch(`http://localhost:8000/favorites/${movieId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${auth.token}` },
+    });
+    setFavoriteFilms(favs => favs.filter(f => f.id !== movieId));
+    setFavorites(favorites.filter((id: number) => id !== movieId));
+  };
+
+  if (!open || !user) return null;
+  return (
+    <div
+      style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.75)', zIndex: 4000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ background: '#181818', borderRadius: 16, boxShadow: '0 4px 32px #000a', padding: 36, minWidth: 340, maxWidth: 420, width: '90vw', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
+        <button
+          onClick={onClose}
+          style={{ position: 'absolute', top: 12, right: 16, background: 'none', border: 'none', color: '#bbb', fontSize: 28, cursor: 'pointer', fontWeight: 700 }}
+          aria-label="Close profile modal"
+        >×</button>
+        <h2 style={{ marginBottom: 12 }}>Profile: {user.username}</h2>
+        <div style={{ color: '#b3b3b3', marginBottom: 18 }}>Role: {user.role}</div>
+        <h3 style={{ marginBottom: 8 }}>Favorite Films</h3>
+        {loading ? (
+          <div style={{ color: '#bbb', margin: '16px 0' }}>Loading...</div>
+        ) : favoriteFilms.length === 0 ? (
+          <div style={{ color: '#bbb', margin: '16px 0' }}>No favorites yet.</div>
+        ) : (
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, width: '100%' }}>
+            {favoriteFilms.map(film => (
+              <li key={film.id} style={{ padding: '8px 0', borderBottom: '1px solid #232946', fontSize: 17, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>{film.title} <span style={{ color: '#bbb', fontSize: 15 }}>({film.year})</span></span>
+                <button onClick={() => removeFavorite(film.id)} style={{ background: 'none', border: 'none', color: '#e50914', fontWeight: 700, fontSize: 18, cursor: 'pointer' }} title="Remove from favorites">×</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HeartButton({ isFavorite, onClick, size = 28, style = {}, title = '' }: { isFavorite: boolean; onClick: (e: React.MouseEvent) => void; size?: number; style?: React.CSSProperties; title?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        position: 'relative',
+        padding: 0,
+        margin: 0,
+        outline: 'none',
+        transition: 'transform 0.15s',
+        ...style,
+      }}
+      aria-label={title || (isFavorite ? 'Remove from favorites' : 'Add to favorites')}
+      className="heart-btn"
+    >
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill={isFavorite ? '#e50914' : 'none'}
+        stroke={isFavorite ? '#e50914' : '#bbb'}
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{
+          filter: isFavorite
+            ? 'drop-shadow(0 2px 6px #e5091444)'
+            : 'drop-shadow(0 1px 2px #0008)',
+          transition: 'fill 0.2s, stroke 0.2s, filter 0.2s',
+          display: 'block',
+        }}
+      >
+        {/* Material Design heart */}
+        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6 4 4 6.5 4c1.74 0 3.41 1.01 4.13 2.44h.74C14.09 5.01 15.76 4 17.5 4 20 4 22 6 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+      </svg>
+      <style>
+        {`
+          .heart-btn:active svg {
+            transform: scale(1.18);
+          }
+        `}
+      </style>
+    </button>
   );
 }

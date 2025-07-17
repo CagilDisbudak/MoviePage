@@ -161,3 +161,15 @@ def get_json_movies():
 def get_json_genres():
     data = load_db_json()
     return data.get("genres", [])
+
+@app.get("/favorites", response_model=list[schemas.FavoriteMovie])
+def get_my_favorites(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return crud.get_favorites(db, current_user.id)
+
+@app.post("/favorites/{movie_id}", response_model=schemas.User)
+def add_favorite(movie_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return crud.add_favorite(db, current_user.id, movie_id)
+
+@app.delete("/favorites/{movie_id}", response_model=schemas.User)
+def remove_favorite(movie_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return crud.remove_favorite(db, current_user.id, movie_id)

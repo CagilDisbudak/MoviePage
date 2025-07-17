@@ -23,10 +23,18 @@ class UserCreate(BaseModel):
     password: str
     role: str = "user"
 
+class FavoriteMovie(BaseModel):
+    id: int
+    title: str
+    year: int
+    class Config:
+        orm_mode = True
+
 class User(BaseModel):
     id: int
     username: str
     role: str
+    favorites: list[FavoriteMovie] = []
     class Config:
         orm_mode = True
 

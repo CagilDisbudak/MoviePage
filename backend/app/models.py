@@ -1,7 +1,13 @@
-from sqlalchemy import Column, Integer, String, Text, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, Float, ForeignKey, Table
 from sqlalchemy.orm import relationship, declarative_base
 
 Base = declarative_base()
+
+favorite_table = Table(
+    'favorites', Base.metadata,
+    Column('user_id', Integer, ForeignKey('users.id'), primary_key=True),
+    Column('movie_id', Integer, ForeignKey('movies.id'), primary_key=True)
+)
 
 class Movie(Base):
     __tablename__ = "movies"
@@ -16,6 +22,7 @@ class Movie(Base):
     category = Column(String, nullable=True)
     genres = Column(String, nullable=True)  # JSON-encoded list of genres
     reviews = relationship("Review", back_populates="movie")
+    favorited_by = relationship("User", secondary=favorite_table, back_populates="favorites")
 
 class User(Base):
     __tablename__ = "users"
@@ -24,6 +31,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     role = Column(String, default="user", nullable=False)
     reviews = relationship("Review", back_populates="user")
+    favorites = relationship("Movie", secondary=favorite_table, back_populates="favorited_by")
 
 class Review(Base):
     __tablename__ = "reviews"
