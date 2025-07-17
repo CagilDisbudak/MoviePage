@@ -14,12 +14,15 @@ class Movie(Base):
     poster_url = Column(String, nullable=True)
     trailer_url = Column(String, nullable=True)
     category = Column(String, nullable=True)
+    genres = Column(String, nullable=True)  # JSON-encoded list of genres
     reviews = relationship("Review", back_populates="movie")
 
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
+    hashed_password = Column(String, nullable=False)
+    role = Column(String, default="user", nullable=False)
     reviews = relationship("Review", back_populates="user")
 
 class Review(Base):

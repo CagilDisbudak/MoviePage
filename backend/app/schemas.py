@@ -18,8 +18,15 @@ class Review(ReviewBase):
 class UserBase(BaseModel):
     username: str
 
-class User(UserBase):
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    role: str = "user"
+
+class User(BaseModel):
     id: int
+    username: str
+    role: str
     class Config:
         orm_mode = True
 
@@ -32,6 +39,7 @@ class MovieBase(BaseModel):
     poster_url: Optional[str] = None
     trailer_url: Optional[str] = None
     category: Optional[str] = None
+    genres: Optional[List[str]] = None  # Add genres as a list of strings
 
 class MovieCreate(MovieBase):
     pass

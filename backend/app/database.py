@@ -30,6 +30,7 @@ def init_db():
             poster_url=m.get('posterUrl', None),
             trailer_url=None,  # No trailer in db.json
             category=m.get('genres', ['Other'])[0] if m.get('genres') else 'Other',
+            genres=json.dumps(m.get('genres', ['Other']))  # Store full genres list as JSON string
         )
         movies.append(movie)
     db.add_all(movies)

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Routes, Route, Link, useParams, useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from './AuthContext';
 
 function injectKeyframes() {
   if (document.getElementById('movie-detail-anim')) return;
@@ -324,11 +325,10 @@ function GenrePage({ movies, genres, FILMS_PER_PAGE }: { movies: any[], genres: 
             onMouseEnter={() => setShowcaseHovered(m.id)}
             onMouseLeave={() => setShowcaseHovered(null)}
           >
-            <img
+            <MoviePoster
               src={m.posterUrl || m.poster_url || placeholderPoster}
               alt={m.title + ' poster'}
               style={showcasePoster}
-              onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = placeholderPoster; }}
             />
             <div style={showcaseInfo}>
               <div style={{ display: 'flex', alignItems: 'center', fontWeight: 700, fontSize: 18, marginBottom: 4 }}>
@@ -336,7 +336,13 @@ function GenrePage({ movies, genres, FILMS_PER_PAGE }: { movies: any[], genres: 
                 <span style={{ fontSize: 16, color: '#FFD700', marginRight: 8 }}>{m.rating ? m.rating.toFixed(1) : 'N/A'}</span>
               </div>
               <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 2 }}>{m.title}</div>
-              <div style={{ color: '#bbb', fontSize: 15 }}>{m.category || 'Other'}{m.year ? `, ${m.year}` : ''}</div>
+              <div style={{ color: '#bbb', fontSize: 15 }}>
+                {(() => {
+                  const genresStr = Array.isArray(m.genres) && m.genres.length > 0 ? m.genres.join(', ') : (m.category || 'Other');
+                  return genresStr.length > 24 ? genresStr.slice(0, 24) + '...' : genresStr;
+                })()}
+                {m.year ? `, ${m.year}` : ''}
+              </div>
             </div>
           </div>
         ))}
@@ -373,6 +379,11 @@ function GenrePage({ movies, genres, FILMS_PER_PAGE }: { movies: any[], genres: 
           <div style={modalContentStyles}>
             <button style={{ position: 'absolute', top: 12, right: 18, background: 'none', border: 'none', fontSize: 32, cursor: 'pointer', color: '#00bfff', textShadow: '0 0 8px #00bfff' }} onClick={() => setSelected(null)} aria-label="Close details">×</button>
             <h2 style={{ ...neonText, fontSize: 28, color: '#00bfff' }}>{selected.title} {selected.year && <span style={{ color: '#b8c1ec', fontSize: 22 }}>({selected.year})</span>}</h2>
+            {selected.genres && selected.genres.length > 0 && (
+              <div style={{ color: '#b3b3b3', fontSize: 16, marginBottom: 8 }}>
+                Genres: {selected.genres.join(', ')}
+              </div>
+            )}
             {selected.director && <p><b>Director:</b> {selected.director}</p>}
             {selected.rating && <p><b>Rating:</b> {selected.rating}</p>}
             {selected.description && <p style={{ marginTop: 14 }}>{selected.description}</p>}
@@ -386,6 +397,18 @@ function GenrePage({ movies, genres, FILMS_PER_PAGE }: { movies: any[], genres: 
         </div>
       )}
     </div>
+  );
+}
+
+function MoviePoster({ src, alt, style }: { src: string; alt: string; style: React.CSSProperties }) {
+  const [imgError, setImgError] = React.useState(false);
+  return (
+    <img
+      src={!imgError ? src : placeholderPoster}
+      alt={alt}
+      style={style}
+      onError={() => setImgError(true)}
+    />
   );
 }
 
@@ -478,6 +501,7 @@ function App() {
     trailer_url?: string;
     trailer?: string;
     category?: string; // Added category for grouping
+    genres?: string[]; // Added genres for detail modal
   }
 
   const [movies, setMovies] = useState<any[]>([]);
@@ -566,21 +590,37 @@ function App() {
   const paged = genreMovies.slice((page - 1) * FILMS_PER_PAGE, page * FILMS_PER_PAGE);
   useEffect(() => { setPage(1); }, [selectedGenre, filter, sort]);
 
-  if (loading) return <div style={mainStyles}>Loading...</div>;
-  if (error) return <div style={mainStyles}>{error}</div>;
-
-  // Helper for smooth scroll
-  const scrollRow = (cat: string, dir: 'left' | 'right') => {
-    const el = rowRefs.current[cat];
-    if (el) {
-      const scrollAmount = 400;
-      const to = dir === 'left' ? el.scrollLeft - scrollAmount : el.scrollLeft + scrollAmount;
-      el.scrollTo({ left: to, behavior: 'smooth' });
-    }
-  };
+  const auth = useAuth();
+  const [authModalOpen, setAuthModalOpen] = React.useState(false);
+  // Show modal on first load if not logged in
+  React.useEffect(() => {
+    if (!auth.user && !auth.loading) setAuthModalOpen(true);
+  }, [auth.user, auth.loading]);
 
   return (
     <>
+      <AuthModal open={authModalOpen} onClose={() => setAuthModalOpen(false)} />
+      {auth.user && !auth.loading && (
+        <div style={{ position: 'fixed', top: 0, right: 0, zIndex: 2000, background: '#181818', color: '#fff', padding: 16, borderBottomLeftRadius: 12, boxShadow: '0 2px 8px #000a', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span>Welcome, <b>{auth.user.username}</b> ({auth.user.role})</span>
+          <button style={{ background: '#00bfff', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 16px', cursor: 'pointer' }} onClick={auth.logout}>Logout</button>
+        </div>
+      )}
+      {!auth.user && !auth.loading && !authModalOpen && (
+        <button
+          style={{ position: 'fixed', top: 16, right: 16, zIndex: 2000, background: '#00bfff', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 16, padding: '10px 28px', boxShadow: '0 2px 8px #00bfff44', cursor: 'pointer' }}
+          onClick={() => setAuthModalOpen(true)}
+        >
+          Login/Register
+        </button>
+      )}
+      {/* Admin-only UI */}
+      {auth.user && auth.user.role === 'admin' && (
+        <div style={{ position: 'fixed', top: 70, right: 0, zIndex: 2000, background: '#232946', color: '#fff', padding: 16, borderBottomLeftRadius: 12, boxShadow: '0 2px 8px #000a', marginTop: 8 }}>
+          <b>Admin Panel</b>
+          <AdminPanel token={auth.token} />
+        </div>
+      )}
       {/* Header */}
       <header style={{ ...headerStyles, height: 72, background: '#000', borderBottom: '2px solid #222', paddingLeft: 0, paddingRight: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', width: '100%', maxWidth: 1400, margin: '0 auto', height: '100%' }}>
@@ -690,11 +730,10 @@ function App() {
                   onMouseEnter={() => setShowcaseHovered(m.id)}
                   onMouseLeave={() => setShowcaseHovered(null)}
                 >
-                  <img
+                  <MoviePoster
                     src={m.posterUrl || m.poster_url || placeholderPoster}
                     alt={m.title + ' poster'}
                     style={showcasePoster}
-                    onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = placeholderPoster; }}
                   />
                   <div style={showcaseInfo}>
                     <div style={{ display: 'flex', alignItems: 'center', fontWeight: 700, fontSize: 18, marginBottom: 4 }}>
@@ -702,7 +741,13 @@ function App() {
                       <span style={{ fontSize: 16, color: '#FFD700', marginRight: 8 }}>{m.rating ? m.rating.toFixed(1) : 'N/A'}</span>
                     </div>
                     <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 2 }}>{m.title}</div>
-                    <div style={{ color: '#bbb', fontSize: 15 }}>{m.category || 'Other'}{m.year ? `, ${m.year}` : ''}</div>
+                    <div style={{ color: '#bbb', fontSize: 15 }}>
+                      {(() => {
+                        const genresStr = Array.isArray(m.genres) && m.genres.length > 0 ? m.genres.join(', ') : (m.category || 'Other');
+                        return genresStr.length > 24 ? genresStr.slice(0, 24) + '...' : genresStr;
+                      })()}
+                      {m.year ? `, ${m.year}` : ''}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -739,6 +784,11 @@ function App() {
                 <div style={modalContentStyles}>
                   <button style={{ position: 'absolute', top: 12, right: 18, background: 'none', border: 'none', fontSize: 32, cursor: 'pointer', color: '#00bfff', textShadow: '0 0 8px #00bfff' }} onClick={() => setSelected(null)} aria-label="Close details">×</button>
                   <h2 style={{ ...neonText, fontSize: 28, color: '#00bfff' }}>{selected.title} {selected.year && <span style={{ color: '#b8c1ec', fontSize: 22 }}>({selected.year})</span>}</h2>
+                  {selected.genres && selected.genres.length > 0 && (
+                    <div style={{ color: '#b3b3b3', fontSize: 16, marginBottom: 8 }}>
+                      Genres: {selected.genres.join(', ')}
+                    </div>
+                  )}
                   {selected.director && <p><b>Director:</b> {selected.director}</p>}
                   {selected.rating && <p><b>Rating:</b> {selected.rating}</p>}
                   {selected.description && <p style={{ marginTop: 14 }}>{selected.description}</p>}
@@ -760,3 +810,79 @@ function App() {
 }
 
 export default App;
+
+function AdminPanel({ token }: { token: string | null }) {
+  const [result, setResult] = React.useState<string>('');
+  const callAdmin = async () => {
+    setResult('Loading...');
+    const res = await fetch('http://localhost:8000/admin-only', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setResult(data.message);
+    } else {
+      setResult('Access denied or error.');
+    }
+  };
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button style={{ background: '#e50914', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 16px', cursor: 'pointer' }} onClick={callAdmin}>
+        Call Admin Endpoint
+      </button>
+      {result && <div style={{ marginTop: 8 }}>{result}</div>}
+    </div>
+  );
+}
+
+function AuthModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const auth = useAuth();
+  const [authTab, setAuthTab] = React.useState<'login' | 'register'>('login');
+  const [loginForm, setLoginForm] = React.useState({ username: '', password: '' });
+  const [registerForm, setRegisterForm] = React.useState({ username: '', password: '' });
+  const [authError, setAuthError] = React.useState('');
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, onClose]);
+
+  if (!open) return null;
+  return (
+    <div
+      style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.75)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ background: '#181818', borderRadius: 16, boxShadow: '0 4px 32px #000a', padding: 36, minWidth: 340, maxWidth: 380, width: '90vw', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
+        <button
+          onClick={onClose}
+          style={{ position: 'absolute', top: 12, right: 16, background: 'none', border: 'none', color: '#bbb', fontSize: 28, cursor: 'pointer', fontWeight: 700 }}
+          aria-label="Close auth modal"
+        >×</button>
+        <div style={{ display: 'flex', gap: 0, marginBottom: 24, width: '100%' }}>
+          <button onClick={() => setAuthTab('login')} style={{ flex: 1, background: authTab === 'login' ? '#00bfff' : 'transparent', color: authTab === 'login' ? '#fff' : '#b3b3b3', border: 'none', borderRadius: '12px 0 0 12px', fontWeight: 700, fontSize: 18, padding: '12px 0', cursor: 'pointer', transition: 'background 0.2s' }}>Login</button>
+          <button onClick={() => setAuthTab('register')} style={{ flex: 1, background: authTab === 'register' ? '#00bfff' : 'transparent', color: authTab === 'register' ? '#fff' : '#b3b3b3', border: 'none', borderRadius: '0 12px 12px 0', fontWeight: 700, fontSize: 18, padding: '12px 0', cursor: 'pointer', transition: 'background 0.2s' }}>Register</button>
+        </div>
+        {authTab === 'login' ? (
+          <form onSubmit={async e => { e.preventDefault(); setAuthError(''); const ok = await auth.login(loginForm.username, loginForm.password); if (!ok) setAuthError('Invalid credentials'); }} style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
+            <input placeholder="Username" value={loginForm.username} onChange={e => setLoginForm(f => ({ ...f, username: e.target.value }))} style={{ padding: 12, borderRadius: 8, border: '1.5px solid #232946', background: '#232946', color: '#fff', fontSize: 17 }} />
+            <input placeholder="Password" type="password" value={loginForm.password} onChange={e => setLoginForm(f => ({ ...f, password: e.target.value }))} style={{ padding: 12, borderRadius: 8, border: '1.5px solid #232946', background: '#232946', color: '#fff', fontSize: 17 }} />
+            <button type="submit" style={{ background: '#00bfff', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 18, padding: '12px 0', marginTop: 8, cursor: 'pointer', boxShadow: '0 2px 8px #00bfff44' }}>Login</button>
+            {authError && <div style={{ color: '#ff4d4f', fontWeight: 600, marginTop: 8, textAlign: 'center' }}>{authError}</div>}
+          </form>
+        ) : (
+          <form onSubmit={async e => { e.preventDefault(); setAuthError(''); const ok = await auth.register(registerForm.username, registerForm.password); if (!ok) setAuthError('Registration failed'); else setAuthError('Registered! You can now log in.'); }} style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
+            <input placeholder="Username" value={registerForm.username} onChange={e => setRegisterForm(f => ({ ...f, username: e.target.value }))} style={{ padding: 12, borderRadius: 8, border: '1.5px solid #232946', background: '#232946', color: '#fff', fontSize: 17 }} />
+            <input placeholder="Password" type="password" value={registerForm.password} onChange={e => setRegisterForm(f => ({ ...f, password: e.target.value }))} style={{ padding: 12, borderRadius: 8, border: '1.5px solid #232946', background: '#232946', color: '#fff', fontSize: 17 }} />
+            <button type="submit" style={{ background: '#00bfff', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 18, padding: '12px 0', marginTop: 8, cursor: 'pointer', boxShadow: '0 2px 8px #00bfff44' }}>Register</button>
+            {authError && <div style={{ color: authError.startsWith('Registered') ? '#00ff99' : '#ff4d4f', fontWeight: 600, marginTop: 8, textAlign: 'center' }}>{authError}</div>}
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
